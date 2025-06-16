@@ -1,6 +1,6 @@
-## Ubuntu: A Docker image used to build and test rippled
+## Debian: A Docker image used to build and test rippled
 
-The code in this repository creates a locked-down Ubuntu image for building and
+The code in this repository creates a locked-down Debian image for building and
 testing rippled in the GitHub CI pipelines.
 
 Although the images will be built by a CI pipeline in this repository, if
@@ -24,10 +24,10 @@ docker login ${DOCKER_REGISTRY} -u "${GITHUB_USER}" --password-stdin
 
 ### Building and pushing the Docker image
 
-The same Dockerfile can be used to build an image for Ubuntu 22.04 and 24.04 or
-future versions by specifying the `UBUNTU_VERSION` build argument. There are
-additional arguments to specify as well, namely `GCC_VERSION` for the GCC flavor
-and `CLANG_VERSION` for the Clang flavor.
+The same Dockerfile can be used to build an image for Debian Bookworm or future
+versions by specifying the `DEBIAN_VERSION` build argument. There are additional
+arguments to specify as well, namely `GCC_VERSION` for the GCC flavor and
+`CLANG_VERSION` for the Clang flavor.
 
 Run the commands below from the current directory containing the Dockerfile.
 
@@ -37,15 +37,15 @@ Ensure you've run the login command above to authenticate with the Docker
 registry.
 
 ```shell
-UBUNTU_VERSION=noble
-GCC_VERSION=14
+DEBIAN_VERSION=bookworm
+GCC_VERSION=12
 CONAN_VERSION=2.17.0
-DOCKER_IMAGE=xrplf/ci/ubuntu-${UBUNTU_VERSION}:gcc${GCC_VERSION}
+DOCKER_IMAGE=xrplf/ci/debian-${DEBIAN_VERSION}:gcc${GCC_VERSION}
 
 DOCKER_BUILDKIT=1 docker build . \
   --target gcc \
   --build-arg BUILDKIT_INLINE_CACHE=1 \
-  --build-arg UBUNTU_VERSION=${UBUNTU_VERSION} \
+  --build-arg DEBIAN_VERSION=${DEBIAN_VERSION} \
   --build-arg GCC_VERSION=${GCC_VERSION} \
   --build-arg CONAN_VERSION=${CONAN_VERSION} \
   --tag ${DOCKER_REGISTRY}/${DOCKER_IMAGE} \
@@ -60,15 +60,15 @@ Ensure you've run the login command above to authenticate with the Docker
 registry.
 
 ```shell
-UBUNTU_VERSION=noble
-CLANG_VERSION=18
+DEBIAN_VERSION=bookworm
+CLANG_VERSION=17
 CONAN_VERSION=2.17.0
-DOCKER_IMAGE=xrplf/ci/ubuntu-${UBUNTU_VERSION}:clang${CLANG_VERSION}
+DOCKER_IMAGE=xrplf/ci/debian-${DEBIAN_VERSION}:clang${CLANG_VERSION}
 
 DOCKER_BUILDKIT=1 docker build . \
   --target clang \
   --build-arg BUILDKIT_INLINE_CACHE=1 \
-  --build-arg UBUNTU_VERSION=${UBUNTU_VERSION} \
+  --build-arg DEBIAN_VERSION=${DEBIAN_VERSION} \
   --build-arg CLANG_VERSION=${CLANG_VERSION} \
   --build-arg CONAN_VERSION=${CONAN_VERSION} \
   --tag ${DOCKER_REGISTRY}/${DOCKER_IMAGE} \
