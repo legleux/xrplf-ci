@@ -7,84 +7,196 @@ on:
       - docker/ubuntu/Dockerfile
 
 env:
-  DOCKER_REGISTRY: ghcr.io
-  DOCKER_BUILDKIT: 1
+  CONTAINER_REGISTRY: ghcr.io
   BUILDKIT_PROGRESS: plain
   CONAN_VERSION: 2.17.0
+  NONROOT_USER: ci
+  FALLBACK_GCC: 12
+  FALLBACK_CLANG: 16
 
 jobs:
-  # Build the Docker image for Ubuntu using different versions of GCC. See
-  # https://documentation.ubuntu.com/ubuntu-for-developers/reference/availability/gcc/.
-  gcc:
-    runs-on: ubuntu-latest
+  # Build the Docker image for Ubuntu using different versions of GCC and Clang.
+  # See https://documentation.ubuntu.com/ubuntu-for-developers/reference/availability/gcc/.
+  # Note, the `os` part of matrix must be kept in sync with the `merge` job below
+  build:
     strategy:
       matrix:
-        version:
-          - os: jammy
-            gcc: 12
-          - os: noble
-            gcc: 13
-          - os: noble
-            gcc: 14
+        architecture:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+        os:
+          - release: jammy
+            compiler_name: gcc
+            compiler_version: 12
+          - release: noble
+            compiler_name: gcc
+            compiler_version: 13
+          - release: noble
+            compiler_name: gcc
+            compiler_version: 14
+          - release: noble
+            compiler_name: clang
+            compiler_version: 16
+          - release: noble
+            compiler_name: clang
+            compiler_version: 17
+          - release: noble
+            compiler_name: clang
+            compiler_version: 18
+          - release: noble
+            compiler_name: clang
+            compiler_version: 19
+    runs-on: ${{ matrix.architecture.runner }}
+    permissions:
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${DOCKER_REGISTRY} -u ${{ github.repository_owner }} --password-stdin
-      - name: Determine the Docker image name.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN  }}
+      - name: Prepare environment
         run: |
           # Convert the repository name to lowercase as the organization name is
-          # uppercase, which is not permitted by the Docker registry.
-          DOCKER_REPOSITORY=${GITHUB_REPOSITORY,,}
-          echo "DOCKER_IMAGE=${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}/ubuntu-${{ matrix.version.os }}:gcc${{ matrix.version.gcc }}" >> $GITHUB_ENV
-      - name: Build the Docker image
-        working-directory: docker/ubuntu
+          # uppercase, which is not permitted by the Docker registry. It's 2025 and GitHub
+          # still does not provide convenient action expression syntax for lowercase.
+          GITHUB_REPO=${{ github.repository }}
+          CONTAINER_REPO=${GITHUB_REPO@L}
+          echo "CONTAINER_REPOSITORY=${CONTAINER_REPO}/ubuntu-${{ matrix.os.release }}" >> $GITHUB_ENV
+          echo "CONTAINER_IMAGE=${CONTAINER_REGISTRY}/${CONTAINER_REPO}/ubuntu-${{ matrix.os.release }}" >> $GITHUB_ENV
+          PLATFORM=${{ matrix.architecture.platform }}
+          echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> $GITHUB_ENV
+      - name: Prepare container metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
+        with:
+          images: ${{ env.CONTAINER_IMAGE }}
+          tags: |
+            type=raw,value=${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}
+            type=sha,prefix=${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-sha-
+          labels: |
+            org.opencontainers.image.authors=For inquiries, please use https://${{ github.repository }}/issues
+            org.opencontainers.image.documentation=https://${{ github.repository }}
+            org.opencontainers.image.vendor=XRPLF
+            org.opencontainers.image.title=${{ env.CONTAINER_REPOSITORY }}
+      - name: Build and push the Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          build-args: |
+            BUILDKIT_DOCKERFILE_CHECK=skip=InvalidDefaultArgInFrom
+            BUILDKIT_INLINE_CACHE=1
+            CLANG_VERSION=${{ matrix.os.compiler_name == 'clang' && matrix.os.compiler_version || env.FALLBACK_CLANG }}
+            GCC_VERSION=${{ matrix.os.compiler_name == 'gcc' && matrix.os.compiler_version || env.FALLBACK_GCC }}
+            CONAN_VERSION=${{ env.CONAN_VERSION }}
+            GITHUB_REPO=${{ github.repository }}
+            NONROOT_USER=${{ env.NONROOT_USER }}
+            UBUNTU_VERSION=${{ matrix.os.release }}
+          context: docker/ubuntu
+          outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          platforms: ${{ matrix.architecture.platform }}
+          provenance: mode=max
+          push: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+          sbom: true
+          labels: ${{ steps.meta.outputs.labels }}
+          target: ${{ matrix.os.compiler_name }}
+      - name: Export digest
+        if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+        shell: bash
         run: |
-          docker build . \
-          --target gcc \
-          --build-arg GITHUB_REPO=${GITHUB_REPOSITORY} \
-          --build-arg UBUNTU_VERSION=${{ matrix.version.os }} \
-          --build-arg GCC_VERSION=${{ matrix.version.gcc }} \
-          --build-arg CONAN_VERSION=${{ env.CONAN_VERSION }} \
-          --tag ${{ env.DOCKER_IMAGE }}
-      - name: Push the Docker image
-        run: docker push ${{ env.DOCKER_IMAGE }}
+          mkdir -p /tmp/digests
+          DIGEST="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${DIGEST#sha256:}"
+      - name: Upload digest
+        if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.os.release }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
-  # Build the Docker image for Ubuntu using different versions of Clang. See
-  # https://documentation.ubuntu.com/ubuntu-for-developers/reference/availability/llvm/.
-  clang:
-    runs-on: ubuntu-latest
+  merge:
+    if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
     strategy:
       matrix:
-        version:
-          - os: noble
-            clang: 16
-          - os: noble
-            clang: 17
-          - os: noble
-            clang: 18
-          - os: noble
-            clang: 19
+        os:
+          - release: jammy
+            compiler_name: gcc
+            compiler_version: 12
+          - release: noble
+            compiler_name: gcc
+            compiler_version: 13
+          - release: noble
+            compiler_name: gcc
+            compiler_version: 14
+          - release: noble
+            compiler_name: clang
+            compiler_version: 16
+          - release: noble
+            compiler_name: clang
+            compiler_version: 17
+          - release: noble
+            compiler_name: clang
+            compiler_version: 18
+          - release: noble
+            compiler_name: clang
+            compiler_version: 19
+    runs-on: ubuntu-24.04
+    needs:
+      - build
+    permissions:
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${DOCKER_REGISTRY} -u ${{ github.repository_owner }} --password-stdin
-      - name: Determine the Docker image name.
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.os.release }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-*
+          merge-multiple: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN  }}
+      - name: Prepare environment
         run: |
-          # Convert the repository name to lowercase as the organization name is
-          # uppercase, which is not permitted by the Docker registry.
-          DOCKER_REPOSITORY=${GITHUB_REPOSITORY,,}
-          echo "DOCKER_IMAGE=${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}/ubuntu-${{ matrix.version.os }}:clang${{ matrix.version.clang }}" >> $GITHUB_ENV
-      - name: Build the Docker image
-        working-directory: docker/ubuntu
+          GITHUB_REPO=${{ github.repository }}
+          CONTAINER_REPO=${GITHUB_REPO@L}
+          echo "CONTAINER_IMAGE=${CONTAINER_REGISTRY}/${CONTAINER_REPO}/ubuntu-${{ matrix.os.release }}" >> $GITHUB_ENV
+      - name: Prepare container metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.CONTAINER_IMAGE }}
+          tags: |
+            type=raw,value=${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}
+            type=sha,prefix=${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-sha-
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        shell: bash
         run: |
-          docker build . \
-          --target clang \
-          --build-arg GITHUB_REPO=${GITHUB_REPOSITORY} \
-          --build-arg UBUNTU_VERSION=${{ matrix.version.os }} \
-          --build-arg CLANG_VERSION=${{ matrix.version.clang }} \
-          --build-arg CONAN_VERSION=${{ env.CONAN_VERSION }} \
-          --tag ${{ env.DOCKER_IMAGE }}
-      - name: Push the Docker image
-        run: docker push ${{ env.DOCKER_IMAGE }}
+          eval "docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(jq -cr '.annotations | map("--annotation \"" + . + "\"") | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.CONTAINER_IMAGE }}@sha256:%s ' *)"
+      - name: Inspect image
+        shell: bash
+        run: |
+          docker buildx imagetools inspect ${{ env.CONTAINER_IMAGE }}:${{ steps.meta.outputs.version }}
