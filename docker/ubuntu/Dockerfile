@@ -2,15 +2,13 @@
 ARG UBUNTU_VERSION
 FROM ubuntu:${UBUNTU_VERSION} AS base
 
-# Use Bash as the default shell for RUN commands and as the entrypoint.
-SHELL ["/bin/bash", "-c"]
-ENTRYPOINT ["/bin/bash"]
+# Use Bash as the default shell for RUN commands with: `set -o errexit -o pipefail`
+SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 
 # Ensure any packages installed directly or indirectly via dpkg do not require
 # manual interaction.
 ARG DEBIAN_FRONTEND=noninteractive
 RUN <<EOF
-set -ex
 ln -fs /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 apt update
 apt upgrade -y
@@ -64,12 +62,30 @@ FROM base AS gcc
 # Install GCC.
 ARG GCC_VERSION
 RUN <<EOF
-apt install -y gcc-${GCC_VERSION} g++-${GCC_VERSION}
+apt update
+apt install -y --no-install-recommends \
+    gcc-${GCC_VERSION} \
+    g++-${GCC_VERSION}
 apt clean
 rm -rf /var/lib/apt/lists/*
+
+update-alternatives \
+    --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_VERSION} ${GCC_VERSION} \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-${GCC_VERSION} \
+    --slave /usr/bin/cpp cpp /usr/bin/cpp-${GCC_VERSION} \
+    --slave /usr/bin/gcov gcov /usr/bin/gcov-${GCC_VERSION} \
+    --slave /usr/bin/gcov-dump gcov-dump /usr/bin/gcov-dump-${GCC_VERSION} \
+    --slave /usr/bin/gcov-tool gcov-tool /usr/bin/gcov-tool-${GCC_VERSION}
+
+if [[ "$(gcc -dumpversion)" != "${GCC_VERSION}" ]]; then
+  echo "ERROR: gcc -dumpversion does not match expected version '${GCC_VERSION}'"
+  exit 1
+fi
+if [[ "$(g++ -dumpversion)" != "${GCC_VERSION}" ]]; then
+  echo "ERROR: g++ -dumpversion does not match expected version '${GCC_VERSION}'"
+  exit 1
+fi
 EOF
-ENV CC=/usr/bin/gcc-${GCC_VERSION}
-ENV CXX=/usr/bin/g++-${GCC_VERSION}
 
 # Switch to the non-root user.
 USER ${NONROOT_USER}
@@ -95,7 +111,10 @@ FROM base AS clang
 # Install Clang.
 ARG CLANG_VERSION
 RUN <<EOF
-apt install -y clang-${CLANG_VERSION} llvm-${CLANG_VERSION}
+apt update
+apt install -y \
+    clang-${CLANG_VERSION} \
+    llvm-${CLANG_VERSION}
 apt clean
 rm -rf /var/lib/apt/lists/*
 EOF
