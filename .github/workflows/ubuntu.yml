@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/ubuntu.yml
       - docker/ubuntu/Dockerfile
+      - test
 
 env:
   CONTAINER_REGISTRY: ghcr.io
@@ -102,7 +103,8 @@ jobs:
             GCOVR_VERSION=${{ env.GCOVR_VERSION }}
             NONROOT_USER=${{ env.NONROOT_USER }}
             UBUNTU_VERSION=${{ matrix.os.release }}
-          context: docker/ubuntu
+          context: .
+          file: docker/ubuntu/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           platforms: ${{ matrix.architecture.platform }}
           provenance: mode=max

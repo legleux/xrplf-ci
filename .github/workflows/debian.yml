@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/debian.yml
       - docker/debian/Dockerfile
+      - test
 
 env:
   CONTAINER_REGISTRY: ghcr.io
@@ -104,7 +105,8 @@ jobs:
             GCOVR_VERSION=${{ env.GCOVR_VERSION }}
             NONROOT_USER=${{ env.NONROOT_USER }}
             DEBIAN_VERSION=${{ matrix.os.release }}
-          context: docker/debian
+          context: .
+          file: docker/debian/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           platforms: ${{ matrix.architecture.platform }}
           provenance: mode=max

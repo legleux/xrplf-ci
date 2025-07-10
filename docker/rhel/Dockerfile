@@ -1,21 +1,14 @@
-# We want to use the subscription-free Red Hat UBI images, but those only
-# provide a subset of the packages available in the full Red Hat Enterprise
-# Linux (RHEL) distribution. To get some of the packages we need, we use those
-# provided by the Rocky Linux project, which is a community-developed operating
-# system designed to be a 100% bug-for-bug compatible alternative to RHEL.
-ARG RHEL_VERSION
-FROM rockylinux/rockylinux:${RHEL_VERSION%.*} AS rocky
-RUN dnf -y install bison flex
-
 # ====================== BASE IMAGE ======================
+ARG RHEL_VERSION
 FROM registry.redhat.io/ubi${RHEL_VERSION%.*}/s2i-base:${RHEL_VERSION} AS base
 
-# Use Bash as the default shell for RUN commands and as the entrypoint.
-SHELL ["/bin/bash", "-c"]
+# Use Bash as the default shell for RUN commands, using the options
+# `set -o errexit -o pipefail`, and as the entrypoint.
+SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 ENTRYPOINT ["/bin/bash"]
 
 # Update the packages installed on the system.
-RUN dnf -y update-minimal --security --sec-severity=Important --sec-severity=Critical
+RUN dnf update-minimal -y --security --sec-severity=Important --sec-severity=Critical
 
 # Install tools that are shared by all stages.
 RUN <<EOF
@@ -34,13 +27,9 @@ pkgs+=(rpm-build)        # Required packaging tool.
 pkgs+=(rpmdevtools)      # Required packaging tool.
 pkgs+=(wget)             # Required build tool.
 dnf install -y --setopt=tsflags=nodocs "${pkgs[@]}"
-dnf -y clean all
+dnf clean -y all
 rm -rf /var/cache/dnf/*
 EOF
-
-# Copy Bison and Flex from the Rocky Linux image.
-COPY --from=rocky /usr/bin/bison /usr/bin/bison
-COPY --from=rocky /usr/bin/flex /usr/bin/flex
 
 # Install Python-based tools.
 ARG CONAN_VERSION
@@ -54,15 +43,43 @@ RUN useradd -ms /bin/bash ${NONROOT_USER}
 # ====================== GCC IMAGE ======================
 FROM base AS gcc
 
-# Install GCC.
+# Install GCC. Red Hat installs GCC as a Software Collection (SCL) package,
+# where typically you would run `scl enable gcc-toolset-X` to open another Bash
+# shell with the GCC toolset enabled. To avoid having to do so, we delete the
+# default GCC packages first, and then reference the GCC toolset binaries
+# directly.
 ARG GCC_VERSION
 RUN <<EOF
+dnf remove -y gcc gcc-c++
 dnf install -y --setopt=tsflags=nodocs gcc-toolset-${GCC_VERSION}-gcc gcc-toolset-${GCC_VERSION}-gcc-c++
-dnf -y clean all
+dnf clean -y all
 rm -rf /var/cache/dnf/*
+update-alternatives \
+    --install /usr/bin/gcc gcc /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcc ${GCC_VERSION} \
+    --slave /usr/bin/g++ g++ /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/g++ \
+    --slave /usr/bin/cpp cpp /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/cpp \
+    --slave /usr/bin/gcov gcov /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcov \
+    --slave /usr/bin/gcov-dump gcov-dump /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcov-dump-${GCC_VERSION} \
+    --slave /usr/bin/gcov-tool gcov-tool /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcov-tool-${GCC_VERSION}
 EOF
 ENV CC=/usr/bin/gcc
 ENV CXX=/usr/bin/g++
+
+# Check that the installed GCC version matches the expected version.
+RUN <<EOF
+CC_VER=$(${CC} -dumpversion)
+CC_VER=${CC_VER%%.*}
+if [[ "${CC_VER}" != "${GCC_VERSION}" ]]; then
+  echo "ERROR: 'gcc -dumpversion' gives '${CC_VER}', which does not match expected version '${GCC_VERSION}'."
+  exit 1
+fi
+CXX_VER=$(${CXX} -dumpversion)
+CXX_VER=${CXX_VER%%.*}
+if [[ "${CXX_VER}" != "${GCC_VERSION}" ]]; then
+  echo "ERROR: g++ -dumpversion gives '${CXX_VER}', which does not match expected version '${GCC_VERSION}'."
+  exit 1
+fi
+EOF
 
 # Switch to the non-root user.
 USER ${NONROOT_USER}
@@ -73,7 +90,11 @@ WORKDIR /home/${NONROOT_USER}
 ENV CONAN_HOME=/home/${NONROOT_USER}/.conan2
 
 # Create a default Conan profile.
-RUN conan profile detect
+RUN <<EOF
+conan profile detect
+rm -rf /tmp/*
+EOF
+
 # Fix the C++ dialect.
 RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profiles/default
 # Explicitly set the compiler flags.
@@ -86,6 +107,13 @@ EOF
 # Print the Conan profile to verify the configuration.
 RUN conan profile show
 
+# Test the image by compiling a simple C++ program.
+RUN --mount=type=bind,source=test,target=/test,readonly <<EOF
+cp -r /test test
+cd test && ./run.sh && cd ..
+rm -rf test
+EOF
+
 # ===================== CLANG IMAGE =====================
 FROM base AS clang
 
@@ -93,11 +121,28 @@ FROM base AS clang
 # to install and we get what is available.
 RUN <<EOF
 dnf install -y --setopt=tsflags=nodocs clang llvm
-dnf -y clean all
+dnf clean -y all
 rm -rf /var/cache/dnf/*
 EOF
 ENV CC=/usr/bin/clang
 ENV CXX=/usr/bin/clang++
+
+# Check that the installed Clang version is not older than the minimum required.
+ARG MINIMUM_CLANG_VERSION=16
+RUN <<EOF
+CC_VER=$(${CC} -dumpversion)
+CC_VER=${CC_VER%%.*}
+if [[ ${CC_VER} -lt ${MINIMUM_CLANG_VERSION} ]]; then
+  echo "ERROR: 'clang -dumpversion' gives '${CC_VER}', which is less than minimum required '${MINIMUM_CLANG_VERSION}'."
+  exit 1
+fi
+CXX_VER=$(${CXX} -dumpversion)
+CXX_VER=${CXX_VER%%.*}
+if [[ ${CXX_VER} -lt ${MINIMUM_CLANG_VERSION} ]]; then
+  echo "ERROR: clang++ -dumpversion gives '${CXX_VER}', which is less than minimum required '${MINIMUM_CLANG_VERSION}'."
+  exit 1
+fi
+EOF
 
 # Switch to the non-root user.
 USER ${NONROOT_USER}
@@ -108,7 +153,11 @@ WORKDIR /home/${NONROOT_USER}
 ENV CONAN_HOME=/home/${NONROOT_USER}/.conan2
 
 # Create a default Conan profile.
-RUN conan profile detect
+RUN <<EOF
+conan profile detect
+rm -rf /tmp/*
+EOF
+
 # Fix the C++ dialect.
 RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profiles/default
 # Explicitly set the compiler flags. To ensure compatibility with a range of
@@ -116,15 +165,13 @@ RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profil
 # of Clang.
 # TODO: Move extra flags into the rippled repository as a custom Conan profile.
 RUN <<EOF
+CXX_VER=$(${CXX} -dumpversion)
+CXX_VER=${CXX_VER%%.*}
 cat >>${CONAN_HOME}/profiles/default <<EOT
 [conf]
 tools.build:compiler_executables={"c": "${CC}", "cpp": "${CXX}"}
 EOT
-if [[ $(clang --version | head -1 | grep -Po 'version \K[0-9]{2}') -ge 20 ]]; then
-    cat >>${CONAN_HOME}/profiles/default <<EOT
-tools.build:cxxflags=['-Wno-missing-template-arg-list-after-template-kw', '-Wno-deprecated-declarations']
-EOT
-elif [[ $(clang --version | head -1 | grep -Po 'version \K[0-9]{2}') -eq 19 ]]; then
+if [[ ${CXX_VER} -ge 19 ]]; then
     cat >>${CONAN_HOME}/profiles/default <<EOT
 tools.build:cxxflags=['-Wno-missing-template-arg-list-after-template-kw']
 EOT
@@ -132,3 +179,10 @@ fi
 EOF
 # Print the Conan profile to verify the configuration.
 RUN conan profile show
+
+# Test the image by compiling a simple C++ program.
+RUN --mount=type=bind,source=test,target=/test,readonly <<EOF
+cp -r /test test
+cd test && ./run.sh && cd ..
+rm -rf test
+EOF

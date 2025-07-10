@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/rhel.yml
       - docker/rhel/Dockerfile
+      - test
 
 env:
   CONTAINER_REGISTRY: ghcr.io
@@ -94,7 +95,8 @@ jobs:
             GCOVR_VERSION=${{ env.GCOVR_VERSION }}
             NONROOT_USER=${{ env.NONROOT_USER }}
             RHEL_VERSION=${{ matrix.os.release }}
-          context: docker/rhel
+          context: .
+          file: docker/rhel/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           platforms: ${{ matrix.architecture.platform }}
           provenance: mode=max
