@@ -98,11 +98,10 @@ rm -rf /tmp/*
 EOF
 
 # Fix the C++ dialect.
-RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profiles/default
+RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' $(conan config home)/profiles/default
 # Explicitly set the compiler flags.
 RUN <<EOF
-cat >>${CONAN_HOME}/profiles/default <<EOT
-[conf]
+cat >> $(conan config home)/global.conf <<EOT
 tools.build:compiler_executables={"c": "${CC}", "cpp": "${CXX}"}
 EOT
 EOF
@@ -117,7 +116,7 @@ std::string f() { return "_" + std::string(" "); }
 EOT
 ${CXX} -std=c++20 -Wall -Werror -O3 -c main.cpp || touch fail
 if [[ -f fail ]]; then
-  cat >>~/.conan2/profiles/default <<EOT
+  cat >> $(conan config home)/global.conf <<EOT
 tools.build:cxxflags=['-Wno-restrict']
 EOT
 fi
@@ -181,7 +180,7 @@ rm -rf /tmp/*
 EOF
 
 # Fix the C++ dialect.
-RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profiles/default
+RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' $(conan config home)/profiles/default
 # Explicitly set the compiler flags. To ensure compatibility with a range of
 # Clang compilers, we must also add extra flags that apply to certain versions
 # of Clang.
@@ -189,12 +188,11 @@ RUN sed -i -e 's|^compiler\.cppstd=.*$|compiler.cppstd=20|' ${CONAN_HOME}/profil
 RUN <<EOF
 CXX_VER=$(${CXX} -dumpversion)
 CXX_VER=${CXX_VER%%.*}
-cat >>${CONAN_HOME}/profiles/default <<EOT
-[conf]
+cat >> $(conan config home)/global.conf <<EOT
 tools.build:compiler_executables={"c": "${CC}", "cpp": "${CXX}"}
 EOT
 if [[ ${CXX_VER} -ge 19 ]]; then
-    cat >>${CONAN_HOME}/profiles/default <<EOT
+    cat >> $(conan config home)/global.conf <<EOT
 tools.build:cxxflags=['-Wno-missing-template-arg-list-after-template-kw']
 EOT
 fi
