@@ -37,7 +37,6 @@ Ensure you've run the login command above to authenticate with the Docker
 registry.
 
 ```shell
-NONROOT_USER=${USER}
 DEBIAN_VERSION=bookworm
 GCC_VERSION=12
 CONAN_VERSION=2.18.0
@@ -53,7 +52,6 @@ docker buildx build . \
   --build-arg DEBIAN_VERSION=${DEBIAN_VERSION} \
   --build-arg GCC_VERSION=${GCC_VERSION} \
   --build-arg GCOVR_VERSION=${GCOVR_VERSION} \
-  --build-arg NONROOT_USER=${NONROOT_USER} \
   --tag ${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}
 ```
 
@@ -63,7 +61,6 @@ Ensure you've run the login command above to authenticate with the Docker
 registry.
 
 ```shell
-NONROOT_USER=${USER}
 DEBIAN_VERSION=bookworm
 CLANG_VERSION=17
 CONAN_VERSION=2.18.0
@@ -79,7 +76,6 @@ docker buildx build . \
   --build-arg CONAN_VERSION=${CONAN_VERSION} \
   --build-arg DEBIAN_VERSION=${DEBIAN_VERSION} \
   --build-arg GCOVR_VERSION=${GCOVR_VERSION} \
-  --build-arg NONROOT_USER=${NONROOT_USER} \
   --tag ${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}
 ```
 
@@ -90,8 +86,17 @@ can do so with the following command:
 
 ```shell
 CODEBASE=<path to the rippled repository>
-docker run --rm -it -v ${CODEBASE}:/rippled ${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}
+docker run --user $(id -u):$(id -g) --rm -it -v ${CODEBASE}:/rippled ${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}
 ```
+
+Note, the above command will assume the identity of the current user in the newly created Docker container.
+**This might be exploited by other users with access to the same host (docker instance)**.
+
+The recommended practice is to run Docker in [rootless mode](https://docs.docker.com/engine/security/rootless/),
+or use alternative container runtime such as [podman](https://docs.podman.io/en/latest/) which
+support [rootless environment](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md).
+This will have similar effect as `--user $(id -u):$(id -g)` (making this option redundant and invalid),
+while also securing the container from other users on the same host.
 
 Once inside the container you can run the following commands to build `rippled`:
 
@@ -112,7 +117,6 @@ cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
 PARALLELISM=2
 cmake --build . -j ${PARALLELISM}
 ./rippled --unittest --unittest-jobs ${PARALLELISM}
-```
 ```
 
 #### Pushing the Docker image to the GitHub registry

@@ -38,10 +38,6 @@ ARG CONAN_VERSION
 ARG GCOVR_VERSION
 RUN pip install --no-cache conan==${CONAN_VERSION} gcovr==${GCOVR_VERSION}
 
-# Create the user to switch to, once all packages have been installed.
-ARG NONROOT_USER
-RUN useradd -ms /bin/bash ${NONROOT_USER}
-
 # ====================== GCC IMAGE ======================
 FROM base AS gcc
 
@@ -56,6 +52,7 @@ dnf remove -y gcc gcc-c++
 dnf install -y --setopt=tsflags=nodocs gcc-toolset-${GCC_VERSION}-gcc gcc-toolset-${GCC_VERSION}-gcc-c++
 dnf clean -y all
 rm -rf /var/cache/dnf/*
+update-alternatives --install /usr/bin/cc cc /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcc 999
 update-alternatives \
     --install /usr/bin/gcc gcc /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/gcc ${GCC_VERSION} \
     --slave /usr/bin/g++ g++ /opt/rh/gcc-toolset-${GCC_VERSION}/root/usr/bin/g++ \
@@ -83,9 +80,7 @@ if [[ "${CXX_VER}" != "${GCC_VERSION}" ]]; then
 fi
 EOF
 
-# Switch to the non-root user.
-USER ${NONROOT_USER}
-ENV HOME=/home/${NONROOT_USER}
+ENV HOME=/root
 WORKDIR ${HOME}
 
 # Set Conan home directory, so the users of this image can find default profile
@@ -147,6 +142,8 @@ rm -rf /var/cache/dnf/*
 EOF
 ENV CC=/usr/bin/clang
 ENV CXX=/usr/bin/clang++
+# This is required by some build dependencies
+RUN update-alternatives --install /usr/bin/cc cc $CC 999
 
 # Check that the installed Clang version is not older than the minimum required.
 ARG MINIMUM_CLANG_VERSION=16
@@ -165,9 +162,7 @@ if [[ ${CXX_VER} -lt ${MINIMUM_CLANG_VERSION} ]]; then
 fi
 EOF
 
-# Switch to the non-root user.
-USER ${NONROOT_USER}
-ENV HOME=/home/${NONROOT_USER}
+ENV HOME=/root
 WORKDIR ${HOME}
 
 # Set Conan home directory, so the users of this image can find default profile
