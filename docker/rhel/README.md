@@ -48,9 +48,11 @@ versions by specifying the `RHEL_VERSION` build argument. There are additional
 arguments to specify as well, namely `GCC_VERSION` for the GCC flavor and
 `CLANG_VERSION` for the Clang flavor.
 
-Run the commands below from the root directory of the repository.
+Both build images for `gcc` and `clang` support packaging.
 
-#### Building the Docker image for GCC.
+In order to build an image, run the commands below from the root directory of the repository.
+
+#### Building the Docker image for GCC
 
 Ensure you've run the login command above to authenticate with the Docker
 registry.
@@ -74,7 +76,7 @@ docker buildx build . \
   --tag ${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}
 ```
 
-#### Building the Docker image for Clang.
+#### Building the Docker image for Clang
 
 Ensure you've run the login command above to authenticate with the Docker
 registry.
