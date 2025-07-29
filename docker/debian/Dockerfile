@@ -81,9 +81,12 @@ ldconfig -v
 dpkg-divert --divert /usr/bin/gcc.orig --rename /usr/bin/gcc
 dpkg-divert --divert /usr/bin/g++.orig --rename /usr/bin/g++
 dpkg-divert --divert /usr/bin/gfortran.orig --rename /usr/bin/gfortran
-update-alternatives --install /usr/bin/cc cc /usr/local/bin/gcc 999
-update-alternatives --install \
-  /usr/bin/gcc gcc /usr/local/bin/gcc 100 \
+update-alternatives \
+  --install /usr/bin/cc cc /usr/local/bin/gcc 999
+update-alternatives \
+  --install /usr/bin/c++ c++ /usr/local/bin/g++ 999
+update-alternatives \
+  --install /usr/bin/gcc gcc /usr/local/bin/gcc 100 \
   --slave /usr/bin/g++ g++ /usr/local/bin/g++ \
   --slave /usr/bin/gcc-ar gcc-ar /usr/local/bin/gcc-ar \
   --slave /usr/bin/gcc-nm gcc-nm /usr/local/bin/gcc-nm \
@@ -93,6 +96,7 @@ update-alternatives --install \
   --slave /usr/bin/gcov-dump gcov-dump /usr/local/bin/gcov-dump \
   --slave /usr/bin/lto-dump lto-dump /usr/local/bin/lto-dump
 update-alternatives --auto cc
+update-alternatives --auto c++
 update-alternatives --auto gcc
 EOF
 # Set the compiler environment variables to point to the GCC binaries.
@@ -144,7 +148,7 @@ RUN conan profile show
 # Test the image by compiling a simple C++ program.
 RUN --mount=type=bind,source=test,target=/test,readonly <<EOF
 cp -r /test test
-cd test && ./run.sh
+cd test && ./run.sh gcc
 cd ..
 rm -rf test
 EOF
@@ -157,10 +161,12 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Install Clang. Use the LLVM apt repository to access the latest versions. We
 # must repeat the DEBIAN_VERSION argument here, as it is not inherited from the
-# base or source images.
+# base or source images. Some build dependencies require GCC to be also available.
 ARG DEBIAN_VERSION
 ARG CLANG_VERSION
 RUN <<EOF
+apt-get update
+apt-get install -y --no-install-recommends gcc g++
 curl --no-progress-meter https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/llvm.gpg
 printf "%s\n%s\n" \
   "deb [signed-by=/etc/apt/keyrings/llvm.gpg] https://apt.llvm.org/${DEBIAN_VERSION}/ llvm-toolchain-${DEBIAN_VERSION}-${CLANG_VERSION} main" \
@@ -169,13 +175,17 @@ apt-get update
 apt-get install -t llvm-toolchain-${DEBIAN_VERSION}-${CLANG_VERSION} -y --no-install-recommends clang-${CLANG_VERSION} llvm-${CLANG_VERSION}
 apt-get clean
 rm -rf /var/lib/apt/lists/*
-update-alternatives --install /usr/bin/cc cc /usr/bin/clang-${CLANG_VERSION} 999
-update-alternatives --install \
-    /usr/bin/clang clang /usr/bin/clang-${CLANG_VERSION} 100 \
-    --slave /usr/bin/clang++ clang++ /usr/bin/clang++-${CLANG_VERSION}
-update-alternatives --install \
-    /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-${CLANG_VERSION} 100
+update-alternatives \
+  --install /usr/bin/cc cc /usr/bin/clang-${CLANG_VERSION} 999
+update-alternatives \
+  --install /usr/bin/c++ c++ /usr/bin/clang++-${CLANG_VERSION} 999
+update-alternatives \
+  --install /usr/bin/clang clang /usr/bin/clang-${CLANG_VERSION} 100 \
+  --slave /usr/bin/clang++ clang++ /usr/bin/clang++-${CLANG_VERSION}
+update-alternatives \
+  --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-${CLANG_VERSION} 100
 update-alternatives --auto cc
+update-alternatives --auto c++
 update-alternatives --auto clang
 update-alternatives --auto llvm-cov
 EOF
@@ -225,7 +235,7 @@ RUN conan profile show
 # Test the image by compiling a simple C++ program.
 RUN --mount=type=bind,source=test,target=/test,readonly <<EOF
 cp -r /test test
-cd test && ./run.sh
+cd test && ./run.sh clang
 cd ..
 rm -rf test
 EOF
