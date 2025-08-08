@@ -165,6 +165,5 @@ RUN --mount=type=bind,source=test,target=test_src \
   conan config install .conan2
   cp -r test_src/* test_bld
   cd test_bld
-  # ls -lash
   ./run.sh "${CC}"
 EOF
