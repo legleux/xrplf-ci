@@ -7,9 +7,6 @@ FROM registry.redhat.io/ubi${RHEL_VERSION%.*}/ubi:${RHEL_VERSION} AS base
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 ENTRYPOINT ["/bin/bash"]
 
-# Update the packages installed on the system.
-RUN dnf update-minimal -y --security --sec-severity=Important --sec-severity=Critical
-
 # Install tools that are shared by all stages.
 RUN <<EOF
 pkgs=()
@@ -23,15 +20,32 @@ pkgs+=(jq)               # JSON manipulation.
 pkgs+=(libstdc++-static) # Required to statically link libraries into rippled.
 pkgs+=(ninja-build)      # Required build tool.
 pkgs+=(perl-FindBin)     # Required to compile OpenSSL.
+pkgs+=(python3.12)       # Required build tool.
+pkgs+=(python3.12-pip)   # Package manager for Python applications.
 pkgs+=(python3-jinja2)   # Required build tool.
-pkgs+=(python3-pip)      # Package manager for Python applications.
 pkgs+=(rpm-build)        # Required packaging tool.
 pkgs+=(rpmdevtools)      # Required packaging tool.
 pkgs+=(vim)              # Text editor.
 pkgs+=(wget)             # Required build tool.
+dnf update -y
 dnf install -y --allowerasing --setopt=tsflags=nodocs "${pkgs[@]}"
 dnf clean -y all
 rm -rf /var/cache/dnf/*
+EOF
+
+# Add symlinks to point to the latest Python versions. The /usr/local/bin
+# directory is in the PATH before the /usr/bin directory, so the new Python
+# versions will be used by default.
+RUN <<EOF
+mkdir -p /usr/local/bin
+ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+ln -sf /usr/bin/python3.12 /usr/local/bin/python
+ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc3
+ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc
+ln -sf /usr/bin/pip3.12 /usr/local/bin/pip3
+ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
+mkdir -p /usr/local/lib
+ln -sf /usr/lib/python3.12 /usr/local/lib/python3.12
 EOF
 
 # Install Python-based tools.
