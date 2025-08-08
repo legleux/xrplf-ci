@@ -1,10 +1,7 @@
 # ====================== BASE IMAGE ======================
-ARG COMPILER
 ARG RHEL_VERSION
 FROM registry.redhat.io/ubi${RHEL_VERSION%.*}/ubi:${RHEL_VERSION} AS base
 ARG RHEL_VERSION
-# ARG GCC_VERSION
-# ARG CLANG_VERSION
 ARG MINIMUM_CLANG_VERSION=16
 ARG CONAN_REMOTE="https://conan.ripplex.io"
 ARG PYTHON_VERSION="3.12"
@@ -14,7 +11,7 @@ ARG COMPILER
 # Use Bash as the default shell for RUN commands, using the options
 # `set -o errexit -o pipefail`, and as the entrypoint.
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
-# ENTRYPOINT ["/bin/bash"]
+WORKDIR /root
 
 # Update the packages installed on the system.
 RUN dnf update-minimal -y --security --sec-severity=Important --sec-severity=Critical
@@ -64,7 +61,6 @@ EOF
 ARG CONAN_VERSION
 ARG GCOVR_VERSION
 RUN pip install --no-cache conan==${CONAN_VERSION} gcovr==${GCOVR_VERSION}
-WORKDIR /root
 COPY <<EOF .conan2/global.conf
 tools.build:compiler_executables={'c': '{{ os.getenv("CC")}}', 'cpp': '{{ os.getenv("CXX")}}'}
 user.package:distro="rhel-${RHEL_VERSION}"
@@ -126,19 +122,25 @@ FROM $COMPILER
 # Check that the installed compiler is what we expect.
 RUN <<EOF
 set -x
-if [ "${COMPILER}" != "clang" ]; then
+comparison='!='
+msg="does not match expected version"
+if [ "${COMPILER}" = "clang" ]; then
+  COMPILER_VERSION="${MINIMUM_CLANG_VERSION}"
+  msg="is less than minimum ${COMPILER} version required"
+  comparison="-lt"
+fi
+
 CC_VER=$(${CC} -dumpversion)
 CC_VER=${CC_VER%%.*}
-if [[ "${CC_VER}" != "${COMPILER_VERSION}" ]]; then
-  echo "ERROR: '${CC} -dumpversion' gives '${CC_VER}', which ${msg:-does not match expected version} '${COMPILER_VERSION}'."
+if [ "${CC_VER}" "${comparison}" "${COMPILER_VERSION}" ]; then
+  echo "ERROR: '${CC} -dumpversion' gives '${CC_VER}', which ${msg} '${COMPILER_VERSION}'."
   exit 1
 fi
 CXX_VER=$(${CXX} -dumpversion)
 CXX_VER=${CXX_VER%%.*}
-if [[ "${CXX_VER}" != "${COMPILER_VERSION}" ]]; then
-  echo "ERROR: ${CXX} -dumpversion gives '${CXX_VER}', which ${msg:-does not match expected version} '${COMPILER_VERSION}'."
+if [ "${CXX_VER}" "${comparison}" "${COMPILER_VERSION}" ]; then
+  echo "ERROR: ${CXX} -dumpversion gives '${CXX_VER}', which ${msg} '${COMPILER_VERSION}'."
   exit 1
-fi
 fi
 EOF
 
