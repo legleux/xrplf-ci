@@ -10,10 +10,4 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 
 # Run the executable.
-./example | grep -E "^Compiler used: $1$"
-
-# Remove the Conan dependencies.
-conan remove -c "*"
-cd $(conan config home)
-rm -f .conan.db
-rm -rf p/
+./example | grep -E "^Compiler used: $(basename $1)$"
