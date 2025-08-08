@@ -20,12 +20,12 @@ RUN dnf update-minimal -y --security --sec-severity=Important --sec-severity=Cri
 # Install tools that are shared by all stages.
 RUN --mount=type=tmpfs,target=/var/cache/dnf/ <<EOF
 pkgs=()
-pkgs+=(ca-certificates)  # Enable TLS verification for HTTPS connections by providing trusted root certificates.
+# pkgs+=(ca-certificates)  # Enable TLS verification for HTTPS connections by providing trusted root certificates.
 pkgs+=(cmake)            # Required build tool.
 pkgs+=(file)             # Required packaging tool.
 pkgs+=(git)              # Required build tool.
-pkgs+=(gpg)              # Dependency for tools requiring signing or encrypting/decrypting.
-pkgs+=(gnupg2)           # Dependency for tools requiring signing or encrypting/decrypting.
+# pkgs+=(gpg)              # Dependency for tools requiring signing or encrypting/decrypting.
+# pkgs+=(gnupg2)           # Dependency for tools requiring signing or encrypting/decrypting.
 pkgs+=(jq)               # JSON manipulation.
 pkgs+=(libstdc++-static) # Required to statically link libraries into xrpld.
 pkgs+=(ninja-build)      # Required build tool.
@@ -33,7 +33,7 @@ pkgs+=(perl-FindBin)     # Required to compile OpenSSL.
 pkgs+=(python${PYTHON_VERSION})       # Required build tool.
 pkgs+=(python${PYTHON_VERSION}-pip)   # Package manager for Python applications.
 pkgs+=(python3-jinja2)   # Required build tool. #NOTE: @mml Really required?
-pkgs+=(rpm-build)        # Required packaging tool.
+# pkgs+=(rpm-build)        # Required packaging tool. in rpmdevtools
 pkgs+=(rpmdevtools)      # Required packaging tool.
 pkgs+=(vim)              # Text editor.
 pkgs+=(wget)             # Required build tool.
