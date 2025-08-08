@@ -1,10 +1,11 @@
-# ====================== BASE IMAGE ======================
+# ====================== BASE STAGE ======================
+ARG COMPILER
 ARG RHEL_VERSION
 FROM registry.redhat.io/ubi${RHEL_VERSION%.*}/ubi:${RHEL_VERSION} AS base
 ARG RHEL_VERSION
 ARG MINIMUM_CLANG_VERSION=16
-ARG CONAN_REMOTE="https://conan.ripplex.io"
-ARG PYTHON_VERSION="3.12"
+ARG CONAN_REMOTE=https://conan.ripplex.io
+ARG PYTHON_VERSION=3.12
 ARG COMPILER_VERSION
 ARG COMPILER
 
@@ -26,13 +27,12 @@ pkgs+=(git)              # Required build tool.
 pkgs+=(gpg)              # Dependency for tools requiring signing or encrypting/decrypting.
 pkgs+=(gnupg2)           # Dependency for tools requiring signing or encrypting/decrypting.
 pkgs+=(jq)               # JSON manipulation.
-pkgs+=(libstdc++-static) # Required to statically link libraries into rippled.
+pkgs+=(libstdc++-static) # Required to statically link libraries into xrpld.
 pkgs+=(ninja-build)      # Required build tool.
 pkgs+=(perl-FindBin)     # Required to compile OpenSSL.
-pkgs+=(python3-pip)      # Package manager for Python applications.
 pkgs+=(python${PYTHON_VERSION})       # Required build tool.
 pkgs+=(python${PYTHON_VERSION}-pip)   # Package manager for Python applications.
-pkgs+=(python3-jinja2)   # Required build tool.
+pkgs+=(python3-jinja2)   # Required build tool. #NOTE: @mml Really required?
 pkgs+=(rpm-build)        # Required packaging tool.
 pkgs+=(rpmdevtools)      # Required packaging tool.
 pkgs+=(vim)              # Text editor.
@@ -44,14 +44,25 @@ EOF
 # Add symlinks to point to the latest Python versions. The /usr/local/bin
 # directory is in the PATH before the /usr/bin directory, so the new Python
 # versions will be used by default.
+# NOTE: @mml Stuff is in lib64
+## python3.9 -c 'import sys; print(sys.path)'
+#['', '/usr/lib64/python39.zip', '/usr/lib64/python3.9', '/usr/lib64/python3.9/lib-dynload', '/usr/lib64/python3.9/site-packages', '/usr/lib/python3.9/site-packages']
+## python3.12 -c 'import sys; print(sys.path)'
+#['', '/usr/lib64/python312.zip', '/usr/lib64/python3.12', '/usr/lib64/python3.12/lib-dynload', '/usr/lib64/python3.12/site-packages', '/usr/lib/python3.12/site-packages']
 RUN <<EOF
-mkdir -p /usr/local/bin
-ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3
-ln -sf /usr/bin/python3 /usr/local/bin/python
-ln -sf /usr/bin/pydoc${PYTHON_VERSION} /usr/local/bin/pydoc3
-ln -sf /usr/bin/pydoc3 /usr/local/bin/pydoc
-ln -sf /usr/bin/pip${PYTHON_VERSION} /usr/local/bin/pip3
-ln -sf /usr/bin/pip3 /usr/local/bin/pip
+#mkdir -p /usr/local/bin
+ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+# ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3
+ln -sf /usr/bin/python3.12 /usr/local/bin/python
+# ln -sf /usr/bin/python3 /usr/local/bin/python
+ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc3
+# ln -sf /usr/bin/pydoc${PYTHON_VERSION} /usr/local/bin/pydoc3
+ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc
+# ln -sf /usr/bin/pydoc3 /usr/local/bin/pydoc
+ln -sf /usr/bin/pip3.12 /usr/local/bin/pip3
+# ln -sf /usr/bin/pip${PYTHON_VERSION} /usr/local/bin/pip3
+ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
+# ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
 mkdir -p /usr/local/lib
 ln -sf /usr/lib/python${PYTHON_VERSION} /usr/local/lib/python${PYTHON_VERSION}
@@ -67,7 +78,7 @@ user.package:distro="rhel-${RHEL_VERSION}"
 tools.info.package_id:confs=["user.package:distro"]
 EOF
 
-# ====================== GCC IMAGE ======================
+# ====================== GCC STAGE ======================
 FROM base AS gcc
 
 RUN <<EOF
@@ -95,7 +106,7 @@ EOF
 ENV CC=/usr/bin/gcc \
     CXX=/usr/bin/g++
 
-# ===================== CLANG IMAGE =====================
+# ===================== CLANG STAGE =====================
 FROM base AS clang
 
 # Install Clang. Note that in the RHEL UBIs, we cannot choose the Clang version
@@ -150,15 +161,18 @@ RUN --mount=type=tmpfs,target=/tmp <<EOF
   set -euo pipefail
   conan profile detect
 EOF
+# Add the XRP Ledger Foundation's Conan remote
 RUN --mount=type=tmpfs,target=/tmp <<EOF
-  conan remote add xrplf "${CONAN_REMOTE}"
+  conan remote add --index 0 xrplf "${CONAN_REMOTE}"
 EOF
+
 # Print the Conan profile to verify the configuration.
 RUN <<EOF
   conan profile show
   conan config show "core*"
   conan remote list
 EOF
+
 # Test the image by compiling a simple C++ program.
 RUN --mount=type=bind,source=test,target=test_src \
     --mount=type=tmpfs,target=test_bld \
