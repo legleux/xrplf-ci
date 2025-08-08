@@ -107,6 +107,8 @@ jobs:
             GCC_VERSION=${{ matrix.os.compiler_version }}
             GCOVR_VERSION=${{ env.GCOVR_VERSION }}
             RHEL_VERSION=${{ matrix.os.release }}
+            COMPILER=${{ matrix.os.compiler_name }}
+            COMPILER_VERSION=${{ matrix.os.compiler_version }}
           context: .
           file: docker/rhel/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
