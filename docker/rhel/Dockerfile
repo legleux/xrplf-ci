@@ -9,6 +9,7 @@ ARG MINIMUM_CLANG_VERSION=16
 ARG CONAN_REMOTE="https://conan.ripplex.io"
 ARG PYTHON_VERSION="3.12"
 ARG COMPILER_VERSION
+ARG COMPILER
 
 # Use Bash as the default shell for RUN commands, using the options
 # `set -o errexit -o pipefail`, and as the entrypoint.
