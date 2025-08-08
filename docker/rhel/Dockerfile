@@ -32,7 +32,7 @@ pkgs+=(ninja-build)      # Required build tool.
 pkgs+=(perl-FindBin)     # Required to compile OpenSSL.
 pkgs+=(python${PYTHON_VERSION})       # Required build tool.
 pkgs+=(python${PYTHON_VERSION}-pip)   # Package manager for Python applications.
-pkgs+=(python3-jinja2)   # Required build tool. #NOTE: @mml Really required?
+pkgs+=(python3-jinja2)   # Required build tool. #NOTE:@mml Really required?
 # pkgs+=(rpm-build)        # Required packaging tool. in rpmdevtools
 pkgs+=(rpmdevtools)      # Required packaging tool.
 pkgs+=(vim)              # Text editor.
@@ -44,27 +44,27 @@ EOF
 # Add symlinks to point to the latest Python versions. The /usr/local/bin
 # directory is in the PATH before the /usr/bin directory, so the new Python
 # versions will be used by default.
-# NOTE: @mml Stuff is in lib64
+# NOTE:@mml Stuff is in lib64
 ## python3.9 -c 'import sys; print(sys.path)'
 #['', '/usr/lib64/python39.zip', '/usr/lib64/python3.9', '/usr/lib64/python3.9/lib-dynload', '/usr/lib64/python3.9/site-packages', '/usr/lib/python3.9/site-packages']
 ## python3.12 -c 'import sys; print(sys.path)'
 #['', '/usr/lib64/python312.zip', '/usr/lib64/python3.12', '/usr/lib64/python3.12/lib-dynload', '/usr/lib64/python3.12/site-packages', '/usr/lib/python3.12/site-packages']
 RUN <<EOF
 #mkdir -p /usr/local/bin
-ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3
 # ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3
-ln -sf /usr/bin/python3.12 /usr/local/bin/python
+ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python
 # ln -sf /usr/bin/python3 /usr/local/bin/python
-ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc3
+ln -sf /usr/bin/pydoc${PYTHON_VERSION} /usr/local/bin/pydoc3
 # ln -sf /usr/bin/pydoc${PYTHON_VERSION} /usr/local/bin/pydoc3
-ln -sf /usr/bin/pydoc3.12 /usr/local/bin/pydoc
+ln -sf /usr/bin/pydoc${PYTHON_VERSION} /usr/local/bin/pydoc
 # ln -sf /usr/bin/pydoc3 /usr/local/bin/pydoc
-ln -sf /usr/bin/pip3.12 /usr/local/bin/pip3
+ln -sf /usr/bin/pip${PYTHON_VERSION} /usr/local/bin/pip3
 # ln -sf /usr/bin/pip${PYTHON_VERSION} /usr/local/bin/pip3
-ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
+ln -sf /usr/bin/pip${PYTHON_VERSION} /usr/local/bin/pip
 # ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-mkdir -p /usr/local/lib
+# mkdir -p /usr/local/lib # NOTE:@mml exists already
 ln -sf /usr/lib/python${PYTHON_VERSION} /usr/local/lib/python${PYTHON_VERSION}
 EOF
 
@@ -133,7 +133,7 @@ FROM $COMPILER
 # Check that the installed compiler is what we expect.
 RUN <<EOF
 set -x
-comparison='!='
+comparison="!="
 msg="does not match expected version"
 if [ "${COMPILER}" = "clang" ]; then
   COMPILER_VERSION="${MINIMUM_CLANG_VERSION}"
@@ -161,6 +161,7 @@ RUN --mount=type=tmpfs,target=/tmp <<EOF
   set -euo pipefail
   conan profile detect
 EOF
+
 # Add the XRP Ledger Foundation's Conan remote
 RUN --mount=type=tmpfs,target=/tmp <<EOF
   conan remote add --index 0 xrplf "${CONAN_REMOTE}"
