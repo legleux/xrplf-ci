@@ -154,7 +154,7 @@ jobs:
             compiler_name: clang
             compiler_version: 'any'
     runs-on: ubuntu-24.04
-    name: ${{ matrix.os.release }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-${{ matrix.architecture.platform }}
+    name: ${{ matrix.os.release }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}
     needs:
       - build
     permissions:
