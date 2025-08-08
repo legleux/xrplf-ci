@@ -119,13 +119,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           # target: ${{ matrix.os.compiler_name }}
       - name: Export digest
-        if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+        # if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
         run: |
           mkdir -p /tmp/digests
           DIGEST="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${DIGEST#sha256:}"
       - name: Upload digest
-        if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+        # if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ matrix.os.release }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}-${{ env.PLATFORM_PAIR }}
@@ -134,7 +134,7 @@ jobs:
           retention-days: 1
 
   merge:
-    if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+    # if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
     strategy:
       matrix:
         os:
