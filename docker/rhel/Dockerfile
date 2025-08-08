@@ -125,10 +125,7 @@ FROM $COMPILER
 # Check that the installed compiler is what we expect.
 RUN <<EOF
 set -x
-if [ "${COMPILER}" = "clang" ]; then
-  COMPILER_VERSION="${MINIMUM_CLANG_VERSION}"
-  msg="is less than minimum required"
-fi
+if [ "${COMPILER}" != "clang" ]; then
 CC_VER=$(${CC} -dumpversion)
 CC_VER=${CC_VER%%.*}
 if [[ "${CC_VER}" != "${COMPILER_VERSION}" ]]; then
@@ -140,6 +137,7 @@ CXX_VER=${CXX_VER%%.*}
 if [[ "${CXX_VER}" != "${COMPILER_VERSION}" ]]; then
   echo "ERROR: ${CXX} -dumpversion gives '${CXX_VER}', which ${msg:-does not match expected version} '${COMPILER_VERSION}'."
   exit 1
+fi
 fi
 EOF
 

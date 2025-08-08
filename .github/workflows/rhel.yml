@@ -51,7 +51,7 @@ jobs:
             compiler_name: clang
             compiler_version: 'any'
     runs-on: ${{ matrix.architecture.runner }}
-    name: ${{ github.workflow }}-${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}
+    name: ${{ matrix.os.compiler_name }}-${{ matrix.os.compiler_version }}
     permissions:
       packages: write
     steps:
