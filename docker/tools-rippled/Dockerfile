@@ -51,8 +51,7 @@ ENV PATH=${VIRTUAL_ENV}/bin:${PATH}
 
 FROM base AS clang-format
 
-# These are not inherited from base image.
-ARG UBUNTU_VERSION
+# This is not inherited from base image.
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install clang-format.
@@ -69,8 +68,7 @@ WORKDIR ${HOME}
 
 FROM base AS documentation
 
-# These are not inherited from base image.
-ARG UBUNTU_VERSION
+# This is not inherited from base image.
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install cmake, required to build the `docs` target.
@@ -115,6 +113,33 @@ apt-get update
 apt-get install -y doxygen=${DOXYGEN_VERSION} graphviz=${GRAPHVIZ_VERSION}
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+EOF
+
+ENV HOME=/root
+WORKDIR ${HOME}
+
+# ====================== PRETTIER IMAGE ======================
+# Note, we do not install a compiler here.
+
+FROM base AS prettier
+
+# This is not inherited from base image.
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install node and npm via nvm, and then install prettier, see also
+# https://nodejs.org/en/download.
+ARG NODE_VERSION
+ARG NPM_VERSION
+ARG NVM_VERSION
+ARG PRETTIER_VERSION
+ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+RUN <<EOF
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash
+\. "${HOME}/.nvm/nvm.sh"
+nvm install ${NODE_VERSION}
+npm install -g --no-audit --no-fund npm@${NPM_VERSION}
+npm install -g --no-audit --no-fund prettier@${PRETTIER_VERSION}
+npm cache clean --force
 EOF
 
 ENV HOME=/root
