@@ -15,9 +15,9 @@ FROM ${BASE_IMAGE} AS gcc-src
 FROM debian:${DEBIAN_VERSION} AS base
 
 # Use Bash as the default shell for RUN commands, using the options
-# `set -o errexit -o pipefail`, and as the entrypoint.
+# `set -o errexit -o pipefail`, and as the default command.
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
-ENTRYPOINT ["/bin/bash"]
+CMD ["/bin/bash"]
 
 # Ensure any packages installed directly or indirectly via dpkg do not require
 # manual interaction.

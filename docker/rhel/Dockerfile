@@ -3,9 +3,9 @@ ARG RHEL_VERSION
 FROM registry.redhat.io/ubi${RHEL_VERSION%.*}/ubi:${RHEL_VERSION} AS base
 
 # Use Bash as the default shell for RUN commands, using the options
-# `set -o errexit -o pipefail`, and as the entrypoint.
+# `set -o errexit -o pipefail`, and as the default command.
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
-ENTRYPOINT ["/bin/bash"]
+CMD ["/bin/bash"]
 
 # Install tools that are shared by all stages.
 RUN <<EOF
